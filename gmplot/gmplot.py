@@ -425,7 +425,7 @@ class GoogleMapPlotter(object):
             f.write('var heatmap_points = [\n')
             for heatmap_lat, heatmap_lng, heatmap_weight in heatmap_points:
                 f.write('{location: new google.maps.LatLng(%f, %f),weight:%f},\n' %
-                        (heatmap_lat, heatmap_lng) % heatmap_weight)
+                        (heatmap_lat, heatmap_lng, heatmap_weight))
             f.write('];\n')
             f.write('\n')
             f.write('var pointArray = new google.maps.MVCArray(heatmap_points);' + '\n')
