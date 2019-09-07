@@ -1,15 +1,15 @@
 from __future__ import absolute_import
 
 import json
-import math
+# import math
 import os
 import requests
 import warnings
 
 from collections import namedtuple
 
-from gmplot.color_dicts import mpl_color_map, html_color_codes
-from gmplot.google_maps_templates import SYMBOLS, CIRCLE
+from color_dicts import mpl_color_map, html_color_codes
+from google_maps_templates import SYMBOLS, CIRCLE
 
 
 Symbol = namedtuple('Symbol', ['symbol', 'lat', 'long', 'size'])
@@ -142,7 +142,7 @@ class GoogleMapPlotter(object):
         path = zip(lats, lngs)
         self.paths.append((path, settings))
 
-    def heatmap(self, lats, lngs, threshold=10, radius=10, gradient=None, opacity=0.6, maxIntensity=1, dissipating=True):
+    def heatmap(self, lats, lngs, weight, threshold=10, radius=10, gradient=None, opacity=0.6, maxIntensity=1, dissipating=True):
         """
         :param lats: list of latitudes
         :param lngs: list of longitudes
@@ -164,8 +164,8 @@ class GoogleMapPlotter(object):
         settings = self._process_heatmap_kwargs(settings)
 
         heatmap_points = []
-        for lat, lng in zip(lats, lngs):
-            heatmap_points.append((lat, lng))
+        for lat, lng, weight in zip(lats, lngs, weight):
+            heatmap_points.append((lat, lng, weight))
         self.heatmap_points.append((heatmap_points, settings))
 
     def _process_heatmap_kwargs(self, settings_dict):
@@ -423,9 +423,9 @@ class GoogleMapPlotter(object):
     def write_heatmap(self, f):
         for heatmap_points, settings_string in self.heatmap_points:
             f.write('var heatmap_points = [\n')
-            for heatmap_lat, heatmap_lng in heatmap_points:
-                f.write('new google.maps.LatLng(%f, %f),\n' %
-                        (heatmap_lat, heatmap_lng))
+            for heatmap_lat, heatmap_lng, heatmap_weight in heatmap_points:
+                f.write('{location: new google.maps.LatLng(%f, %f),weight:%f},\n' %
+                        (heatmap_lat, heatmap_lng) % heatmap_weight)
             f.write('];\n')
             f.write('\n')
             f.write('var pointArray = new google.maps.MVCArray(heatmap_points);' + '\n')
