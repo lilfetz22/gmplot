@@ -239,10 +239,18 @@ class GoogleMapPlotter(object):
             '<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>\n')
         f.write(self.indent()+'<title>Google Maps - gmplot </title>\n')
         f.write(self.indent())
+
+        try:
+            if self.data_external is True:
+                f.write('{0}<script type="text/javascript" src="data.js"></script>\n'.format(self.indent()))
+        except:
+            pass
+        
         if self.apikey:
             f.write('<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?libraries=visualization&sensor=true_or_false&key=%s"></script>\n' % self.apikey )
         else:
             f.write('<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?libraries=visualization&sensor=true_or_false"></script>\n' )
+        
         f.write(self.indent()+'<script type="text/javascript">\n')
         # Make global scope variables
         self.write_global_vars(f)
@@ -470,8 +478,11 @@ class GoogleMapPlotter(object):
         if not isinstance(self.heatmap_points, dict):
             raise TypeError('Heatmap Points is not a dictionary.')
         
-        f.write('var dataPointsByMonth = '+json.dumps(self.heatmap_points, indent=4)+';')
-        f.write('\n')
+        try:
+            if self.data_external is not True:
+                raise Error('go to exception')
+        except:
+            f.write('var dataPointsByMonth = '+json.dumps(self.heatmap_points, indent=4)+';\n')
 
         # Generate Heatmaps with indexing that matches range values, in numerical order
         f.write(self.indent(3)+'var timestamps = Object.keys(dataPointsByMonth).sort((a, b) => Number(a) < Number(b));\n')
