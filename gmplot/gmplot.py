@@ -171,13 +171,13 @@ class GoogleMapPlotter(object):
 
     def _process_heatmap_kwargs(self, settings_dict):
         settings_string = ''
-        settings_string += "heatmap.set('threshold', %d);\n" % settings_dict['threshold']
-        settings_string += "heatmap.set('radius', %d);\n" % settings_dict['radius']
-        settings_string += "heatmap.set('maxIntensity', %d);\n" % settings_dict['maxIntensity']
-        settings_string += "heatmap.set('opacity', %f);\n" % settings_dict['opacity']
+        settings_string += "{0}heatmap.set('threshold', {1});\n".format(self.indent(4), settings_dict['threshold'])
+        settings_string += "{0}heatmap.set('radius', {1});\n".format(self.indent(4), settings_dict['radius'])
+        settings_string += "{0}heatmap.set('maxIntensity', {1});\n".format(self.indent(4), settings_dict['maxIntensity'])
+        settings_string += "{0}heatmap.set('opacity', {1});\n".format(self.indent(4), settings_dict['opacity'])
 
         dissipation_string = 'true' if settings_dict['dissipating'] else 'false'
-        settings_string += "heatmap.set('dissipating', %s);\n" % (dissipation_string)
+        settings_string += "{0}heatmap.set('dissipating', {1});\n".format(self.indent(4), dissipation_string)
 
         gradient = settings_dict['gradient']
         if gradient:
@@ -185,7 +185,7 @@ class GoogleMapPlotter(object):
             for r, g, b, a in gradient:
                 gradient_string += "\t" + "'rgba(%d, %d, %d, %d)',\n" % (r, g, b, a)
             gradient_string += '];' + '\n'
-            gradient_string += "heatmap.set('gradient', gradient);\n"
+            gradient_string += "{0}heatmap.set('gradient', gradient);\n".format(self.indent(4))
 
             settings_string += gradient_string
 
@@ -233,16 +233,17 @@ class GoogleMapPlotter(object):
         f = open(htmlfile, 'w')
         f.write('<html>\n')
         f.write('<head>\n')
-        f.write(
+        f.write(self.indent()+
             '<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />\n')
-        f.write(
+        f.write(self.indent()+
             '<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>\n')
-        f.write('<title>Google Maps - gmplot </title>\n')
+        f.write(self.indent()+'<title>Google Maps - gmplot </title>\n')
+        f.write(self.indent())
         if self.apikey:
             f.write('<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?libraries=visualization&sensor=true_or_false&key=%s"></script>\n' % self.apikey )
         else:
             f.write('<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?libraries=visualization&sensor=true_or_false"></script>\n' )
-        f.write('<script type="text/javascript">\n')
+        f.write(self.indent()+'<script type="text/javascript">\n')
         # Make global scope variables
         self.write_global_vars(f)
         # Document.onload() function
@@ -260,8 +261,8 @@ class GoogleMapPlotter(object):
             self.write_heatmap(f)
         self.write_ground_overlay(f)
         self.write_final_initialization(f)
-        f.write('\t}\n')
-        f.write('</script>\n')
+        f.write(self.indent(2)+'}\n')
+        f.write('{0}</script>\n'.format(self.indent()))
         # specialized script
         self.write_event_handlers(f)
         f.write('</head>\n')
@@ -273,13 +274,15 @@ class GoogleMapPlotter(object):
         f.write('</body>\n')
         f.write('</html>\n')
         f.close()
+        print("File creation completed!")
 
     def indent(self, tab_level=1):
-        one_tab = ' '+' '+' '+' '      # 4 spaces = 1 tab
+        one_tab = ' ' * 4      # 4 spaces = 1 tab
         t = 0
         spaces = ""
         while t < tab_level:
-            spaces += one_tab
+            spaces = spaces + one_tab
+            t += 1
         return spaces
 
 
@@ -336,16 +339,16 @@ class GoogleMapPlotter(object):
 
     # TODO: Add support for mapTypeId: google.maps.MapTypeId.SATELLITE
     def write_map(self,  f):
-        f.write('\t\tvar centerlatlng = new google.maps.LatLng(%f, %f);\n' %
-                (self.center[0], self.center[1]))
-        f.write('\t\tvar myOptions = {\n')
-        f.write('\t\t\tzoom: %d,\n' % (self.zoom))
-        f.write('\t\t\tcenter: centerlatlng,\n')
-        f.write('\t\t\tmapTypeId: google.maps.MapTypeId.ROADMAP\n')
-        f.write('\t\t};\n')
+        f.write('{0}var centerlatlng = new google.maps.LatLng({1}, {2});\n'.format(
+            self.indent(3), self.center[0], self.center[1])
+        )
+        f.write(self.indent(3)+'var myOptions = {\n')
+        f.write('{0}zoom: {1},\n'.format(self.indent(4),self.zoom))
+        f.write('{0}center: centerlatlng,\n'.format(self.indent(4)))
+        f.write('{0}mapTypeId: google.maps.MapTypeId.ROADMAP\n'.format(self.indent(4)))
+        f.write(self.indent(3)+'};\n')
         f.write(
-            '\t\tvar map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);\n')
-        f.write('\n')
+            '{0}var map = new google.maps.Map(document.getElementById("map_canvas"), myOptions);\n'.format(self.indent(3)))
 
     def write_point(self, f, lat, lon, color, title):
         f.write('\t\tvar latlng = new google.maps.LatLng(%f, %f);\n' %
@@ -466,7 +469,7 @@ class GoogleMapPlotter(object):
         if not isinstance(self.heatmap_points, dict):
             raise TypeError('Heatmap Points is not a dictionary.')
         
-        f.write(self.indent(3)+'var dataPointsByMonth = '+json.dumps(self.heatmap_points, indent=4))
+        f.write('var dataPointsByMonth = '+json.dumps(self.heatmap_points, indent=4)+';')
         f.write('\n')
 
         # Generate Heatmaps with indexing that matches range values, in numerical order
@@ -492,7 +495,6 @@ class GoogleMapPlotter(object):
         f.write(self.indent(3)+'}\n')
 
     def write_ground_overlay(self, f):
-
         for url, bounds_string in self.ground_overlays:
             f.write(bounds_string)
             f.write('var groundOverlay;' + '\n')
@@ -535,7 +537,7 @@ class GoogleMapPlotter(object):
         f.write(self.indent(2)+'<input id="timeline-date-selector"\n')
         f.write(self.indent(3) + 'type="range"\n')
         f.write(self.indent(3) + 'min="0"\n')
-        f.write(self.indent(3) + 'max="'+len(self.heatmap_points.keys())+'"\n')
+        f.write(self.indent(3) + 'max="{0}"\n'.format(len(self.heatmap_points.keys())-1))
         f.write(self.indent(3) + 'step="1"\n')
         f.write(self.indent(3) + 'list="timelineTickmarks"\n')
         f.write(self.indent(3) + 'style="width:100%; display:block;"\n')
@@ -544,9 +546,10 @@ class GoogleMapPlotter(object):
         t = 0
         while t < len(self.heatmap_points.keys()):
             if t % 120 == 0:
-                f.write(self.indent(3)+'<option value="%i" label="%s"></option>\n' % t % datetime.fromtimestamp(self.heatmap_points.keys()[t]).strftime('%Y'))
+                timestamp = list(self.heatmap_points.keys())[t]
+                f.write(self.indent(3)+'<option value="{0}" label="{1}"></option>\n'.format(t, datetime.datetime.fromtimestamp(timestamp).strftime('%Y')))
             elif t % 12 == 0:
-                f.write(self.indent(3)+'<option value="%i"></option>\n' % t)
+                f.write(self.indent(3)+'<option value="{0}"></option>\n'.format(t))
             else:
                 pass
             t += 1
