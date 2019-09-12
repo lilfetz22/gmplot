@@ -249,6 +249,7 @@ class GoogleMapPlotter(object):
         # Document.onload() function
         f.write(self.indent(2)+'function initialize() {\n')
         self.write_map(f)
+        f.write(self.indent(3)+'googleMap = map;\n')    # set global var
         self.write_grids(f)
         self.write_points(f)
         self.write_paths(f)
@@ -481,7 +482,7 @@ class GoogleMapPlotter(object):
         f.write(self.indent(4) + 'for ( var p in monthData ) {\n')
         f.write(self.indent(5)  +  'var datapt = monthData[p];\n')
         f.write(self.indent(5)  +  'heatmap_points.push({\n')
-        f.write(self.indent(6)   +   'location: new google.maps.LatLng(datapt.Latidude, datapt.Longitude),\n')
+        f.write(self.indent(6)   +   'location: new google.maps.LatLng(datapt.Latitude, datapt.Longitude),\n')
         f.write(self.indent(6)   +   'weight: datapt.weight\n')
         f.write(self.indent(5)  +  '})\n')
         f.write(self.indent(4) + '}\n')
@@ -505,7 +506,7 @@ class GoogleMapPlotter(object):
             f.write('groundOverlay.setMap(map);' + '\n')
 
     def write_global_vars(self, f):
-        f.write(self.indent(2)+'var map;\n')
+        f.write(self.indent(2)+'var googleMap;\n')
         f.write(self.indent(2)+'var heatmapStorage = [];\n')
         f.write(self.indent(2)+'var currentHeatMap;\n')
 
@@ -547,7 +548,7 @@ class GoogleMapPlotter(object):
         while t < len(self.heatmap_points.keys()):
             if t % 120 == 0:
                 timestamp = list(self.heatmap_points.keys())[t]
-                f.write(self.indent(3)+'<option value="{0}" label="{1}"></option>\n'.format(t, datetime.datetime.fromtimestamp(timestamp).strftime('%Y')))
+                f.write(self.indent(3)+'<option value="{0}" label="{1}"></option>\n'.format(t, datetime.datetime.fromtimestamp(int(float(timestamp))/1000).strftime('%Y')))
             elif t % 12 == 0:
                 f.write(self.indent(3)+'<option value="{0}"></option>\n'.format(t))
             else:
@@ -567,13 +568,13 @@ class GoogleMapPlotter(object):
         f.write(self.indent(2)+'}\n')
         f.write(self.indent(2)+'function updateSelectedDate(e) {\n')
         f.write(self.indent(3) + 'var dateDisplay = document.getElementById("timeline-selected-date");\n')
-        f.write(self.indent(3) + 'var dateObj = new Date(Number(heatmapStorage[""+e.target.value].timestamp));\n')
+        f.write(self.indent(3) + 'var dateObj = new Date(Number(heatmapStorage[Number(e.target.value)].timestamp));\n')
         f.write(self.indent(3) + 'dateDisplay.innerText = dateObj.toDateString().replace(/^[^ ]*[ ]/, "").replace(/^([A-Za-z]* [0-9]+) ([0-9]{4})$/,"$1, $2");\n')
         f.write(self.indent(2)+'}\n')
         f.write(self.indent(2)+'function changeHeatMap(e) {\n')
-        f.write(self.indent(3) + 'if (currentHeatMap != null) currentHeatMap.setMap();		// Reset previous map reference\n')
-        f.write(self.indent(3) + 'currentHeatMap = heatmapStorage[""+e.target.value].kml;		// Change to new heatmap\n')
-        f.write(self.indent(3) + 'currentHeatMap.setMap(map);									// apply to Maps window\n')
+        f.write(self.indent(3) + 'if (currentHeatMap != null) currentHeatMap.setMap();		    // Reset previous map reference\n')
+        f.write(self.indent(3) + 'currentHeatMap = heatmapStorage[Number(e.target.value)].kml;	// Change to new heatmap\n')
+        f.write(self.indent(3) + 'currentHeatMap.setMap(googleMap);								// apply to Maps window\n')
         f.write(self.indent(2)+'}\n')
         f.write(self.indent()+'</script>\n')
 
