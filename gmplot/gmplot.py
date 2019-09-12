@@ -5,6 +5,7 @@ import json
 import os
 import requests
 import warnings
+import datetime
 
 from collections import namedtuple
 
@@ -143,14 +144,14 @@ class GoogleMapPlotter(object):
         self.paths.append((path, settings))
 
     def heatmap(self, lats, lngs, weight, threshold=10, radius=10, gradient=None, opacity=0.6, maxIntensity=1, dissipating=True):
-        """
+        '''
         :param lats: list of latitudes
         :param lngs: list of longitudes
         :param maxIntensity:(int) max frequency to use when plotting. Default (None) uses max value on map domain.
         :param threshold:
         :param radius: The hardest param. Example (string):
         :return:
-        """
+        '''
         settings = {}
         # Try to give anyone using threshold a heads up.
         if threshold != 10:
@@ -242,7 +243,10 @@ class GoogleMapPlotter(object):
         else:
             f.write('<script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?libraries=visualization&sensor=true_or_false"></script>\n' )
         f.write('<script type="text/javascript">\n')
-        f.write('\tfunction initialize() {\n')
+        # Make global scope variables
+        self.write_global_vars(f)
+        # Document.onload() function
+        f.write(self.indent(2)+'function initialize() {\n')
         self.write_map(f)
         self.write_grids(f)
         self.write_points(f)
@@ -250,18 +254,34 @@ class GoogleMapPlotter(object):
         self.write_circles(f)
         self.write_symbols(f)
         self.write_shapes(f)
-        self.write_heatmap(f)
+        if isinstance(self.heatmap_points, dict):
+            self.write_heatmap_from_dictionary(f)
+        else:
+            self.write_heatmap(f)
         self.write_ground_overlay(f)
+        self.write_final_initialization(f)
         f.write('\t}\n')
         f.write('</script>\n')
+        # specialized script
+        self.write_event_handlers(f)
         f.write('</head>\n')
         f.write(
             '<body style="margin:0px; padding:0px;" onload="initialize()">\n')
+        self.write_timeline_element(f)
         f.write(
             '\t<div id="map_canvas" style="width: 100%; height: 100%;"></div>\n')
         f.write('</body>\n')
         f.write('</html>\n')
         f.close()
+
+    def indent(self, tab_level=1):
+        one_tab = ' '+' '+' '+' '      # 4 spaces = 1 tab
+        t = 0
+        spaces = ""
+        while t < tab_level:
+            spaces += one_tab
+        return spaces
+
 
     #############################################
     # # # # # # Low level Map Drawing # # # # # #
@@ -437,6 +457,40 @@ class GoogleMapPlotter(object):
             f.write('heatmap.setMap(map);' + '\n')
             f.write(settings_string)
 
+    def write_heatmap_from_dictionary(self, f):
+        ''' creates multiple heatmap variables per key provided
+            where the value is an array of point dictionaries.
+            A point dictionary has 3 keys:
+             1. Latitude, 2. Longitude, 3. weight
+        '''
+        if not isinstance(self.heatmap_points, dict):
+            raise TypeError('Heatmap Points is not a dictionary.')
+        
+        f.write(self.indent(3)+'var dataPointsByMonth = '+json.dumps(self.heatmap_points, indent=4))
+        f.write('\n')
+
+        # Generate Heatmaps with indexing that matches range values, in numerical order
+        f.write(self.indent(3)+'var timestamps = Object.keys(dataPointsByMonth).sort((a, b) => Number(a) < Number(b));\n')
+        f.write(self.indent(3)+'for (var i = 0; i < timestamps.length; i++) {\n')
+        f.write(self.indent(4) + 'var monthData = dataPointsByMonth[timestamps[i]];\n')
+        f.write(self.indent(4) + 'var heatmap_points = new Array();\n')
+        f.write('\n')
+        f.write(self.indent(4) + 'for ( var p in monthData ) {\n')
+        f.write(self.indent(5)  +  'var datapt = monthData[p];\n')
+        f.write(self.indent(5)  +  'heatmap_points.push({\n')
+        f.write(self.indent(6)   +   'location: new google.maps.LatLng(datapt.Latidude, datapt.Longitude),\n')
+        f.write(self.indent(6)   +   'weight: datapt.weight\n')
+        f.write(self.indent(5)  +  '})\n')
+        f.write(self.indent(4) + '}\n')
+        f.write('\n')
+        f.write(self.indent(4) + 'var heatmap = new google.maps.visualization.HeatmapLayer({\n')
+        f.write(self.indent(5)   +   'data: new google.maps.MVCArray(heatmap_points)\n')
+        f.write(self.indent(4) + '});\n')
+        f.write(self.settings_string if self.settings_string is not None else '\n')
+        f.write('\n')
+        f.write(self.indent(4) + 'heatmapStorage[i] = { "timestamp": timestamps[i], "kml": heatmap };\n')
+        f.write(self.indent(3)+'}\n')
+
     def write_ground_overlay(self, f):
 
         for url, bounds_string in self.ground_overlays:
@@ -447,6 +501,78 @@ class GoogleMapPlotter(object):
             f.write("'" + url + "'," + '\n')
             f.write('imageBounds);' + '\n')
             f.write('groundOverlay.setMap(map);' + '\n')
+
+    def write_global_vars(self, f):
+        f.write(self.indent(2)+'var map;\n')
+        f.write(self.indent(2)+'var heatmapStorage = [];\n')
+        f.write(self.indent(2)+'var currentHeatMap;\n')
+
+    def write_final_initialization(self, f):
+        '''
+        '''
+        # Finally set the initial heatmap visual by automatically calling event propogation
+        f.write(self.indent(3)+'var timelineElement = document.getElementById("timeline-date-selector");\n')
+        # Set event handler
+        f.write(self.indent(3)+'timelineElement.addEventListener("input", onTimelineInputChange);\n')
+        # default
+        f.write(self.indent(3)+'timelineElement.value = Math.floor(heatmapStorage.length / 2)\n')
+        # create input event
+        f.write(self.indent(3)+'timelineElement.dispatchEvent(\n')
+        f.write(self.indent(4) + 'new Event("input", {\n')
+        f.write(self.indent(5)  +  '"bubbles": true,\n')
+        f.write(self.indent(5)  +  '"cancelable": true\n')
+        f.write(self.indent(4) + '})\n')
+        f.write(self.indent(3)+');\n')
+
+    def write_timeline_element(self, f):
+        '''
+        '''
+        if not isinstance(self.heatmap_points, dict):
+            return()
+
+        f.write(self.indent(1)+'<div style="text-align: center; padding: 0.5em 1em;">\n')
+        f.write(self.indent(2)+'<div style="font-weight: bold;" id="timeline-selected-date">Feb 1, 1980</div>\n')
+        f.write(self.indent(2)+'<input id="timeline-date-selector"\n')
+        f.write(self.indent(3) + 'type="range"\n')
+        f.write(self.indent(3) + 'min="0"\n')
+        f.write(self.indent(3) + 'max="'+len(self.heatmap_points.keys())+'"\n')
+        f.write(self.indent(3) + 'step="1"\n')
+        f.write(self.indent(3) + 'list="timelineTickmarks"\n')
+        f.write(self.indent(3) + 'style="width:100%; display:block;"\n')
+        f.write(self.indent(2)+'/>\n')
+        f.write(self.indent(2)+'<datalist id="timelineTickmarks" style="display: inline-flex;">\n')
+        t = 0
+        while t < len(self.heatmap_points.keys()):
+            if t % 120 == 0:
+                f.write(self.indent(3)+'<option value="%i" label="%s"></option>\n' % t % datetime.fromtimestamp(self.heatmap_points.keys()[t]).strftime('%Y'))
+            elif t % 12 == 0:
+                f.write(self.indent(3)+'<option value="%i"></option>\n' % t)
+            else:
+                pass
+            t += 1
+        
+        f.write(self.indent(2)+'</datalist>\n')
+        f.write(self.indent()+'</div>\n')
+
+    def write_event_handlers(self, f):
+        '''
+        '''
+        f.write(self.indent()+'<script type="text/javascript">\n')
+        f.write(self.indent(2)+'function onTimelineInputChange(e) {\n')
+        f.write(self.indent(3) + 'changeHeatMap(e);\n')
+        f.write(self.indent(3) + 'updateSelectedDate(e);\n')
+        f.write(self.indent(2)+'}\n')
+        f.write(self.indent(2)+'function updateSelectedDate(e) {\n')
+        f.write(self.indent(3) + 'var dateDisplay = document.getElementById("timeline-selected-date");\n')
+        f.write(self.indent(3) + 'var dateObj = new Date(Number(heatmapStorage[""+e.target.value].timestamp));\n')
+        f.write(self.indent(3) + 'dateDisplay.innerText = dateObj.toDateString().replace(/^[^ ]*[ ]/, "").replace(/^([A-Za-z]* [0-9]+) ([0-9]{4})$/,"$1, $2");\n')
+        f.write(self.indent(2)+'}\n')
+        f.write(self.indent(2)+'function changeHeatMap(e) {\n')
+        f.write(self.indent(3) + 'if (currentHeatMap != null) currentHeatMap.setMap();		// Reset previous map reference\n')
+        f.write(self.indent(3) + 'currentHeatMap = heatmapStorage[""+e.target.value].kml;		// Change to new heatmap\n')
+        f.write(self.indent(3) + 'currentHeatMap.setMap(map);									// apply to Maps window\n')
+        f.write(self.indent(2)+'}\n')
+        f.write(self.indent()+'</script>\n')
 
 if __name__ == "__main__":
 
